@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 #include <unordered_set>
+#include <unordered_map>
 
 /**
  * Feel free to define/modify variables here.
@@ -112,51 +113,42 @@ inline void Initialize() {
  */
 inline void Tick() {
     std::unordered_set<long long> new_live_cells;
-    std::unordered_set<long long> checked;
+    std::unordered_map<long long, int> neighbor_count;
 
-    // For each live cell and its neighbors, calculate if it should be alive in the next generation
+    // Count neighbors for all cells that might change
     for (long long key : live_cells) {
         int x = key_to_x(key);
         int y = key_to_y(key);
 
-        // Check the cell itself and all 8 neighbors
+        // Increment neighbor count for all 8 neighbors
         for (int dx = -1; dx <= 1; dx++) {
             for (int dy = -1; dy <= 1; dy++) {
+                if (dx == 0 && dy == 0) continue;
+
                 int nx = x + dx;
                 int ny = y + dy;
 
                 if (nx < 0 || nx >= row || ny < 0 || ny >= col) continue;
 
                 long long nkey = coord_to_key(nx, ny);
-                if (checked.count(nkey)) continue;
-                checked.insert(nkey);
+                neighbor_count[nkey]++;
+            }
+        }
+    }
 
-                // Count live neighbors
-                int live_neighbors = 0;
-                for (int ddx = -1; ddx <= 1; ddx++) {
-                    for (int ddy = -1; ddy <= 1; ddy++) {
-                        if (ddx == 0 && ddy == 0) continue;
-                        int nnx = nx + ddx;
-                        int nny = ny + ddy;
-                        if (nnx >= 0 && nnx < row && nny >= 0 && nny < col) {
-                            if (live_cells.count(coord_to_key(nnx, nny))) {
-                                live_neighbors++;
-                            }
-                        }
-                    }
-                }
+    // Apply Conway's rules
+    for (const auto& [key, count] : neighbor_count) {
+        bool is_alive = live_cells.count(key) > 0;
 
-                // Apply Conway's rules
-                bool is_alive = live_cells.count(nkey) > 0;
-                if (is_alive) {
-                    if (live_neighbors == 2 || live_neighbors == 3) {
-                        new_live_cells.insert(nkey);
-                    }
-                } else {
-                    if (live_neighbors == 3) {
-                        new_live_cells.insert(nkey);
-                    }
-                }
+        if (is_alive) {
+            // Living cell with 2 or 3 neighbors survives
+            if (count == 2 || count == 3) {
+                new_live_cells.insert(key);
+            }
+        } else {
+            // Dead cell with exactly 3 neighbors becomes alive
+            if (count == 3) {
+                new_live_cells.insert(key);
             }
         }
     }
