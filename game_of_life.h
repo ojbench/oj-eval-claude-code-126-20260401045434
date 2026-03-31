@@ -16,6 +16,7 @@
 #include <vector>
 #include <unordered_set>
 #include <unordered_map>
+#include <algorithm>
 
 /**
  * Feel free to define/modify variables here.
@@ -168,93 +169,87 @@ inline void Tick() {
 inline void PrintGame() {
     std::cout << col << " " << row << "\n";
 
-    std::string result;
-
-    // Find the last non-empty row
-    int last_nonempty_row = -1;
-    for (int r = 0; r < row; r++) {
-        for (int c = 0; c < col; c++) {
-            if (live_cells.count(coord_to_key(r, c))) {
-                last_nonempty_row = r;
-                break;
-            }
-        }
+    if (live_cells.empty()) {
+        std::cout << "!\n";
+        return;
     }
 
-    for (int r = 0; r <= last_nonempty_row; r++) {
-        int consecutive_dead = 0;
-        int consecutive_alive = 0;
+    std::string result;
 
-        // Find the last alive cell in this row
-        int last_alive_col = -1;
-        for (int c = 0; c < col; c++) {
-            if (live_cells.count(coord_to_key(r, c))) {
-                last_alive_col = c;
-            }
+    // Build a map of rows that have live cells
+    std::unordered_map<int, std::vector<int>> rows_with_cells;
+    int max_row = -1;
+
+    for (long long key : live_cells) {
+        int r = key_to_x(key);
+        int c = key_to_y(key);
+        rows_with_cells[r].push_back(c);
+        if (r > max_row) max_row = r;
+    }
+
+    // Sort columns in each row
+    for (auto& [r, cols] : rows_with_cells) {
+        std::sort(cols.begin(), cols.end());
+    }
+
+    int prev_row = -1;
+
+    for (int r = 0; r <= max_row; r++) {
+        if (rows_with_cells.find(r) == rows_with_cells.end()) {
+            continue; // Empty row, will be handled by $ compression
         }
 
-        for (int c = 0; c <= last_alive_col; c++) {
-            bool is_alive = live_cells.count(coord_to_key(r, c)) > 0;
+        // Add row separators for skipped rows
+        if (r > prev_row + 1) {
+            int skipped = r - prev_row;
+            if (skipped > 1) {
+                result += std::to_string(skipped) + "$";
+            } else {
+                result += "$";
+            }
+        } else if (prev_row >= 0) {
+            result += "$";
+        }
+        prev_row = r;
 
-            if (is_alive) {
-                // Flush dead cells
-                if (consecutive_dead > 0) {
-                    if (consecutive_dead > 1) {
-                        result += std::to_string(consecutive_dead);
-                    }
-                    result += 'b';
-                    consecutive_dead = 0;
-                }
+        const auto& cols = rows_with_cells[r];
+        int prev_col = -1;
+        int consecutive_alive = 0;
+
+        for (int c : cols) {
+            // Check if this is consecutive with the previous live cell
+            if (c == prev_col + 1) {
                 consecutive_alive++;
             } else {
-                // Flush alive cells
+                // Flush previous consecutive alive cells
                 if (consecutive_alive > 0) {
                     if (consecutive_alive > 1) {
                         result += std::to_string(consecutive_alive);
                     }
                     result += 'o';
-                    consecutive_alive = 0;
                 }
-                consecutive_dead++;
+
+                // Add dead cells between live cells
+                int dead_count = c - prev_col - 1;
+                if (dead_count > 0) {
+                    if (dead_count > 1) {
+                        result += std::to_string(dead_count);
+                    }
+                    result += 'b';
+                }
+
+                consecutive_alive = 1;
             }
+            prev_col = c;
         }
 
-        // Flush remaining alive cells
+        // Flush remaining consecutive alive cells
         if (consecutive_alive > 0) {
             if (consecutive_alive > 1) {
                 result += std::to_string(consecutive_alive);
             }
             result += 'o';
         }
-
-        // Add row separator (but compress multiple empty rows)
-        if (r < last_nonempty_row) {
-            // Check how many empty rows follow this one
-            int empty_rows = 0;
-            for (int rr = r + 1; rr <= last_nonempty_row; rr++) {
-                bool has_alive = false;
-                for (int c = 0; c < col; c++) {
-                    if (live_cells.count(coord_to_key(rr, c))) {
-                        has_alive = true;
-                        break;
-                    }
-                }
-                if (has_alive) break;
-                empty_rows++;
-            }
-
-            if (empty_rows > 1) {
-                result += std::to_string(empty_rows + 1) + "$";
-                r += empty_rows;
-            } else {
-                result += '$';
-            }
-        }
-    }
-
-    // Handle the case where the entire grid is empty
-    if (last_nonempty_row == -1) {
-        result = "";
     }
 
     result += '!';
